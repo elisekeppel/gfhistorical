@@ -1,14 +1,43 @@
 #-----------------------------------------------------------------------------
-# 1. First need to get modern catch for species of interest by year, fishery and major
-#    area
+# 1. Extract catch data for all species of rockfish by year, fishery and major
+#    area from GF_MERGED_CATCH
 #-----------------------------------------------------------------------------
-
-# define spp of interest
+library(gfdata)
+library(dplyr)
+# arguments for future function:
 spp <- 403
-# get all records of the spp being caught
-dat <- gfdata:::get_historical_catch(403)
+foreign <- FALSE
+major <- c("01", "03", "04", "05", "06", "07", "08", "09")
+refyears <- 1997:2005
+
+# set some variables
+trf <- gfdata::run_sql("GFFOS", "SELECT SPECIES_CODE
+  FROM GFFOS.dbo.SPECIES
+  WHERE SPECIES_COMMON_NAME LIKE '%ROCKFISH%' OR SPECIES_SCIENTIFIC_NAME LIKE '%SEBASTES%'")
+trf <- trf$SPECIES_CODE
+orf <- setdiff(trf, 396)
+
+#-----------------------------------------------------------------------------
+# get all catch records
+#-----------------------------------------------------------------------------
+gfmc_catch_data <- here::here("data/all_gfmc_rf_catch.rds")
+if (file.exists(gfmc_catch_data)) {
+  dat <- readRDS(gfmc_catch_data)
+  } else {
+    dat <- gfdata:::get_catch(trf)
+    saveRDS(dat, "data/all_gfmc_rf_catch.rds")
+  }
+
 d <- dat
+
 d$fishery_sector <- tolower(d$fishery_sector)
+d <- d %>%
+  select(database_name, fishery_sector, major_stat_area_code,
+    major_stat_area_name, year, trip_id, fishing_event_id, gear, best_depth,
+    species_code, species_common_name, landed_kg:discarded_pcs) %>%
+  filter(major_stat_area_code %in% major) %>%
+  mutate_if(is.numeric, funs(replace(., is.na(.),0))) %>%
+  filter(!(landed_kg == 0 & landed_pcs == 0 & discarded_kg == 0 & discarded_pcs == 0))
 
 # group fishery sectors
 d <- d %>% mutate(
@@ -20,12 +49,46 @@ d <- d %>% mutate(
     fishery_sector %in% c("sablefish") ~ "sable",
     fishery_sector %in% c("foreign") ~ "foreign"
   ))
+
 # TO DO: need to work out what to do with foreign catch (will differ based on species and fishery)
-
+if(!foreign){
+  d <- d %>% filter(!fishery_sector %in% "foreign")
+}
 fishery <- unique(d$fishery_sector)
-major <- c("01", "03", "04", "05", "06", "07", "08", "09")
 
-# filter for trusted modern years and appropriate major areas (these are
+# calculate average wt/pc by year, fishery_sector and major area for each
+# species to apply to modern piece data
+avg_wt <- d %>%
+  select(year, fishery_sector, major_stat_area_code, species_code, landed_kg, landed_pcs) %>%
+  filter(landed_kg > 0 & landed_pcs > 0) %>%
+  group_by(year, fishery_sector, major_stat_area_code, species_code) %>%
+  summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs)) %>%
+  ungroup()
+
+# apply avg_wt to landing and discard records only reporting pieces and not kg
+d <- d %>%
+  left_join(avg_wt, by = c("year", "fishery_sector", "major_stat_area_code", "species_code")) %>%
+  mutate(landed_kg_per_pc = ifelse(is.na(landed_kg_per_pc), 0, landed_kg_per_pc)) %>%
+  mutate(
+    est_landed_kg = ifelse(landed_kg == 0, landed_pcs * landed_kg_per_pc, 0),
+    est_discarded_kg = ifelse(discarded_kg == 0, discarded_pcs * landed_kg_per_pc, 0)) %>%
+  mutate(best_landed_kg = ifelse(!landed_kg == 0, landed_kg, est_landed_kg))
+
+# TO DO: discards
+# %>%
+#   mutate(best_discarded_kg = coalesce(discarded_kg, est_discarded_kg)) %>%
+#   mutate(best_catch_kg = best_landed_kg + best_discarded_kg)
+
+# calculate overall average wt/pc by fishery_sector and major area for each
+# species to apply to historic data
+avg_wt_overall <- d %>%
+  select(fishery_sector, major_stat_area_code, species_code, landed_kg, landed_pcs) %>%
+  filter(landed_kg > 0 & landed_pcs > 0) %>%
+  group_by(fishery_sector, major_stat_area_code, species_code) %>%
+  summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs)) %>%
+  ungroup()
+
+# create modern catch based on trusted modern years of data by fishery (these are
 # defaults from PBStools - should be discussed and adjusted for individual
 # species or species groups)
 hl_yr <- 1986
@@ -40,33 +103,16 @@ modern_catch <- d %>% filter(
     (fishery_sector == "dogling" & year >= dogling_yr) |
     (fishery_sector == "trawl" & year >= trawl_yr) |
     (fishery_sector == "sable" & year >= sable_yr)
-) %>%
-  filter(major_stat_area_code %in% major)
+)
 
-
-# calculate average wt/pc by fishery_sector, major area and year for modern data
-avg_wt_modern <- modern_catch %>%
-  select(year, fishery_sector, major_stat_area_code, landed_kg, landed_pcs) %>%
-  filter(landed_kg > 0 & landed_pcs >0) %>%
-  group_by(year, fishery_sector, major_stat_area_code) %>%
-  summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs))
-
-# calculate overall average wt/pc by fishery_sector and major area to apply to
-# all historical data
-avg_wt_overall <- modern_catch %>%
-  select(year, fishery_sector, major_stat_area_code, landed_kg, landed_pcs) %>%
-  filter(landed_kg > 0 & landed_pcs >0) %>%
-  group_by(year, fishery_sector, major_stat_area_code) %>%
-  summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs))
-
-# TO DO: apply modern_avg_wt to modern records only reporting pieces
 # TO DO: apply overall_avg_wt to historical records only reporting pieces
 # TO DO: maybe calculate discarded_kg from discarded pcs and avg wt - by year
 #   and major (or minor?) may use for modern or historical
 
 modern_catch_sum <- modern_catch %>%
-  group_by(fishery_sector, major_stat_area_code, year) %>%
-  summarise(sum_landed_kg = sum(landed_kg))
+  group_by(year, fishery_sector, major_stat_area_code) %>%
+  summarise(sum_landed_kg = sum(best_landed_kg))
+
 
 #-----------------------------------------------------------------------------
 # 2. calculate ratio of RRF to ORF for each fishery and area
@@ -85,11 +131,9 @@ dogling_ref_yrs <- 1997:2005
 trawl_ref_yrs <- 1997:2005
 sable_ref_yrs <- 1997:2005
 
-# note that may have to use data before filtering for modern_catch if ref_years
-# start before trusted years (I don't understand why the defaults show up this
-# way)
-
-modern_catch_by_area_and_fishery <- modern_catch %>%
+# reference catch - total catch over all reference years by major area
+# and fishery
+ref_catch <- d %>%
   filter(
     (fishery_sector == "hlrock" & year %in% hlrock_ref_yrs) |
       (fishery_sector == "halibut" & year %in% halibut_ref_yrs) |
@@ -98,12 +142,16 @@ modern_catch_by_area_and_fishery <- modern_catch %>%
       (fishery_sector == "sable" & year %in% sable_ref_yrs)
   ) %>%
   group_by(fishery_sector, major_stat_area_code, major_stat_area_name) %>%
-  summarise(landed_kg = sum(landed_kg), discarded_kg = sum(discarded_kg))
+  summarise(landed_kg = sum(best_landed_kg), discarded_kg = sum(discarded_kg))
 
 # TO DO: should depth be included in this?
+#----------------------------------------------------------------------------------------OK TO HERE
+
+#TO DO: define and calculate TRF, ORF, POP and RRF catches
 
 # calculate denominator (ORF caught per area and fishery for trusted
 # years of each fishery)
+
 
 # TO DO: check Rowan's .rda file orfhistory.rda (might need to build orf from
 # the big, nasty spreadsheets... or at least code the steps done to from some
