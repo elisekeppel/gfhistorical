@@ -5,7 +5,7 @@
 library(gfdata)
 library(dplyr)
 # arguments for future function:
-spp <- 403
+rrf <- 403
 foreign <- FALSE
 major <- c("01", "03", "04", "05", "06", "07", "08", "09")
 refyears <- 1997:2005
@@ -72,8 +72,7 @@ avg_wt <- d %>%
   group_by(year, fishery_sector, major_stat_area_code, species_code, landed_kg_per_pc) %>%
   summarise(landed_kg_per_pc_annual = mean(landed_kg/landed_pcs)) %>%
   ungroup() %>%
-  mutate(landed_kg_per_pc_annual = ifelse(is.na(landed_kg_per_pc_annual), 0, landed_kg_per_pc_annual)) %>%
-  mutate(landed_kg_per_pc = ifelse(is.na(landed_kg_per_pc), 0, landed_kg_per_pc))
+  mutate_if(is.numeric, list(~replace(., is.na(.),0)))
 
 # apply avg_wt to landing and discard records only reporting pieces and not kg
 d <- d %>%
@@ -81,10 +80,11 @@ d <- d %>%
   mutate(
     est_landed_kg = ifelse(landed_kg == 0, ifelse(
       !landed_kg_per_pc_annual == 0, landed_pcs * landed_kg_per_pc_annual, landed_pcs * landed_kg_per_pc), landed_kg),
+    best_landed_kg = ifelse(!landed_kg == 0, landed_kg, est_landed_kg),
     est_discarded_kg = ifelse(discarded_kg == 0, ifelse(
-      !landed_kg_per_pc_annual == 0, discarded_pcs * landed_kg_per_pc_annual, discarded_pcs * landed_kg_per_pc), discarded_kg)) %>%
-  mutate(best_landed_kg = ifelse(!landed_kg == 0, landed_kg, est_landed_kg)) %>%
-  mutate(best_discarded_kg = ifelse(!discarded_kg == 0, discarded_kg, est_discarded_kg))
+      !landed_kg_per_pc_annual == 0, discarded_pcs * landed_kg_per_pc_annual, discarded_pcs * landed_kg_per_pc), discarded_kg),
+    best_discarded_kg = ifelse(!discarded_kg == 0, discarded_kg, est_discarded_kg)) %>%
+  mutate_if(is.numeric, list(~replace(., is.na(.),0)))
 
 #-----------------------------------------------------------------------------
 # modern catch summary by sector, year, major area and species/group
@@ -108,10 +108,15 @@ modern_catch <- d %>% filter(
 
 
 modern_catch_sum <- modern_catch %>%
-  group_by(year, fishery_sector, major_stat_area_code, species_code) %>%
+  group_by(year, fishery_sector, major_stat_area_code) %>%
   mutate(trf = sum(best_landed_kg + best_discarded_kg),
-    pop = sum(ifelse(species_code == 396, best_landed_kg + best_discarded_kg, 0))) %>%
-  ungroup
+    pop = sum(ifelse(species_code == 396, best_landed_kg + best_discarded_kg, 0)),
+    rrf = sum(ifelse(species_code == rrf, best_landed_kg + best_discarded_kg, 0)),
+    orf = sum(ifelse(!species_code == 396, best_landed_kg + best_discarded_kg, 0))) %>%
+  ungroup() %>%
+  group_by(year, fishery_sector, major_stat_area_code, trf, pop, orf, rrf) %>%
+  summarise() %>%
+  ungroup()
 
 
 #-----------------------------------------------------------------------------
@@ -133,16 +138,18 @@ sable_ref_yrs <- 1997:2005
 
 # reference catch - total catch over all reference years by major area
 # and fishery
-ref_catch <- d %>%
-  filter(
+ref_catch <- modern_catch_sum %>% filter(
     (fishery_sector == "hlrock" & year %in% hlrock_ref_yrs) |
       (fishery_sector == "halibut" & year %in% halibut_ref_yrs) |
       (fishery_sector == "dogling" & year %in% dogling_ref_yrs) |
       (fishery_sector == "trawl" & year %in% trawl_ref_yrs) |
       (fishery_sector == "sable" & year %in% sable_ref_yrs)
   ) %>%
-  group_by(fishery_sector, major_stat_area_code, major_stat_area_name) %>%
-  summarise(landed_kg = sum(best_landed_kg), discarded_kg = sum(discarded_kg))
+  group_by(fishery_sector, major_stat_area_code) %>%
+  summarise(trf = sum(trf),
+    pop = sum(pop),
+    rrf = sum(rrf),
+    orf = sum(orf))
 
 # TO DO: should depth be included in this?
 #----------------------------------------------------------------------------------------OK TO HERE
