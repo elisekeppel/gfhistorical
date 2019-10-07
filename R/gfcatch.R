@@ -36,7 +36,7 @@ d <- d %>%
     major_stat_area_name, year, trip_id, fishing_event_id, gear, best_depth,
     species_code, species_common_name, landed_kg:discarded_pcs) %>%
   filter(major_stat_area_code %in% major) %>%
-  mutate_if(is.numeric, funs(replace(., is.na(.),0))) %>%
+  mutate_if(is.numeric, list(~replace(., is.na(.),0))) %>%
   filter(!(landed_kg == 0 & landed_pcs == 0 & discarded_kg == 0 & discarded_pcs == 0))
 
 # group fishery sectors
@@ -56,38 +56,39 @@ if(!foreign){
 }
 fishery <- unique(d$fishery_sector)
 
-# calculate average wt/pc by year, fishery_sector and major area for each
-# species to apply to modern piece data
+
+#-----------------------------------------------------------------------------
+# estimate catch weights for catch counts
+#-----------------------------------------------------------------------------
+# calculate average wt/pc by year, fishery_sector and major area, and by
+# fishery sector and major area, for each species to apply to piece-only data
+# TO DO: should this be restricted to certain years?
 avg_wt <- d %>%
   select(year, fishery_sector, major_stat_area_code, species_code, landed_kg, landed_pcs) %>%
   filter(landed_kg > 0 & landed_pcs > 0) %>%
-  group_by(year, fishery_sector, major_stat_area_code, species_code) %>%
-  summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs)) %>%
-  ungroup()
+  group_by(fishery_sector, major_stat_area_code, species_code) %>%
+  mutate(landed_kg_per_pc = mean(landed_kg/landed_pcs)) %>%
+  ungroup() %>%
+  group_by(year, fishery_sector, major_stat_area_code, species_code, landed_kg_per_pc) %>%
+  summarise(landed_kg_per_pc_annual = mean(landed_kg/landed_pcs)) %>%
+  ungroup() %>%
+  mutate(landed_kg_per_pc_annual = ifelse(is.na(landed_kg_per_pc_annual), 0, landed_kg_per_pc_annual)) %>%
+  mutate(landed_kg_per_pc = ifelse(is.na(landed_kg_per_pc), 0, landed_kg_per_pc))
 
 # apply avg_wt to landing and discard records only reporting pieces and not kg
 d <- d %>%
   left_join(avg_wt, by = c("year", "fishery_sector", "major_stat_area_code", "species_code")) %>%
-  mutate(landed_kg_per_pc = ifelse(is.na(landed_kg_per_pc), 0, landed_kg_per_pc)) %>%
   mutate(
-    est_landed_kg = ifelse(landed_kg == 0, landed_pcs * landed_kg_per_pc, 0),
-    est_discarded_kg = ifelse(discarded_kg == 0, discarded_pcs * landed_kg_per_pc, 0)) %>%
-  mutate(best_landed_kg = ifelse(!landed_kg == 0, landed_kg, est_landed_kg))
+    est_landed_kg = ifelse(landed_kg == 0, ifelse(
+      !landed_kg_per_pc_annual == 0, landed_pcs * landed_kg_per_pc_annual, landed_pcs * landed_kg_per_pc), landed_kg),
+    est_discarded_kg = ifelse(discarded_kg == 0, ifelse(
+      !landed_kg_per_pc_annual == 0, discarded_pcs * landed_kg_per_pc_annual, discarded_pcs * landed_kg_per_pc), discarded_kg)) %>%
+  mutate(best_landed_kg = ifelse(!landed_kg == 0, landed_kg, est_landed_kg)) %>%
+  mutate(best_discarded_kg = ifelse(!discarded_kg == 0, discarded_kg, est_discarded_kg))
 
-# TO DO: discards
-# %>%
-#   mutate(best_discarded_kg = coalesce(discarded_kg, est_discarded_kg)) %>%
-#   mutate(best_catch_kg = best_landed_kg + best_discarded_kg)
-
-# calculate overall average wt/pc by fishery_sector and major area for each
-# species to apply to historic data
-avg_wt_overall <- d %>%
-  select(fishery_sector, major_stat_area_code, species_code, landed_kg, landed_pcs) %>%
-  filter(landed_kg > 0 & landed_pcs > 0) %>%
-  group_by(fishery_sector, major_stat_area_code, species_code) %>%
-  summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs)) %>%
-  ungroup()
-
+#-----------------------------------------------------------------------------
+# modern catch summary by sector, year, major area and species/group
+#-----------------------------------------------------------------------------
 # create modern catch based on trusted modern years of data by fishery (these are
 # defaults from PBStools - should be discussed and adjusted for individual
 # species or species groups)
@@ -105,13 +106,12 @@ modern_catch <- d %>% filter(
     (fishery_sector == "sable" & year >= sable_yr)
 )
 
-# TO DO: apply overall_avg_wt to historical records only reporting pieces
-# TO DO: maybe calculate discarded_kg from discarded pcs and avg wt - by year
-#   and major (or minor?) may use for modern or historical
 
 modern_catch_sum <- modern_catch %>%
-  group_by(year, fishery_sector, major_stat_area_code) %>%
-  summarise(sum_landed_kg = sum(best_landed_kg))
+  group_by(year, fishery_sector, major_stat_area_code, species_code) %>%
+  mutate(trf = sum(best_landed_kg + best_discarded_kg),
+    pop = sum(ifelse(species_code == 396, best_landed_kg + best_discarded_kg, 0))) %>%
+  ungroup
 
 
 #-----------------------------------------------------------------------------
@@ -148,6 +148,7 @@ ref_catch <- d %>%
 #----------------------------------------------------------------------------------------OK TO HERE
 
 #TO DO: define and calculate TRF, ORF, POP and RRF catches
+#TO DO: FUNCTIONALIZE!!!
 
 # calculate denominator (ORF caught per area and fishery for trusted
 # years of each fishery)
