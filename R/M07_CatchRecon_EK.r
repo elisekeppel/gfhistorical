@@ -17,7 +17,7 @@
 ## ---------------------------------------------RH
 buildCatch=function(
    dbdat,                ## List object of landing records from eight DFO databases
-   strSpp="403",         ## Hart species code for the rockfish to be reconstructed (RRF)
+   strSpp="442",         ## Hart species code for the rockfish to be reconstructed (RRF)
    orfSpp="ORF",         ## Field name of the denominator in the ratio of RRF to other rockfish (usually ORF but can be TRF or POP if these are more appropriate)
    major=c(1,3:9),       ## Major PMFC area codes to see in plots; catch is always reconstructed for majors c(1,3:9)
    fidout=c(1:5,10),     ## Fishery IDs for which an annual series barplot stacked by PMFC area is produced
@@ -374,7 +374,7 @@ buildCatch=function(
 				load(paste0(dpath,"/gfmdat.rda"))
 			else {
 				.flush.cat("   SQL Server -- GFFOS (table GF_MERGED_CATCH) [takes a few minutes];\n")
-				getData("fos_mcatORF.sql","GFFOS",strSpp=strSpp,path=spath,tenv=penv())
+				getData("fos_mcatORF.sql","GFFOS",strSpp=strSpp,path=spath,tenv=penv())  ####HERE : what data come in from gfmc?
 				PBSdat$Y[round(PBSdat$Y,5)==0] = NA
 				PBSdat$X[round(PBSdat$X,5)==0] = NA
 				PBSdat = calcStockArea(strSpp,PBSdat)
@@ -835,11 +835,11 @@ buildCatch=function(
 					## -------------------------------------------------------------------------------------
 					## Allocate based on mean proportions in each major observed over a number of years (>2)
 					## -------------------------------------------------------------------------------------
-					cattab = catmod1[,mm,kk,ll,aa]
-					catobs = apply(cattab,1,function(x){length(x[x>0])})
-					catyrs = names(catobs)[catobs>2]
+					cattab = catmod1[,mm,kk,ll,aa] #EK: total catch in each major for every year
+					catobs = apply(cattab,1,function(x){length(x[x>0])}) #EK: number of areas with catch > 0 for every year
+					catyrs = names(catobs)[catobs>2] #EK: this pulls out years with more than 2 areas with catch > 0 - if wanting years with all areas, need catobs = 8
 					if (length(catyrs)==0) next
-					pmaj   = apply(apply(cattab[catyrs,,drop=FALSE],1,pcalc),1,mean)  ## do not use geometric mean here (proportion allocation) !!!
+					pmaj   = apply(apply(cattab[catyrs,,drop=FALSE],1,pcalc),1,mean)  ## do not use geometric mean here (proportion allocation) !!! #EK: is this proportion of catch being used instead of alpha (alpha which is based on just reference years, not all available years)? Or are both used??
 					allo   = t(t(catmod0[,"0",kk,ll,aa]))%*%pmaj; dimnames(allo)[[2]] = mm
 #if(aa=="gfmcat" && kk=="1" && ll=="landed") {browser();return()}
 					catmod1[,mm,kk,ll,aa] = catmod1[,mm,kk,ll,aa] + allo
@@ -854,7 +854,7 @@ buildCatch=function(
 	}	}
 
 	## -------------------------------------------------------------------
-	## Allocate catch (t) from unknown fid (code=0) to standard fids (1:5)
+	## Allocate catch (t) from unknown fid (code=0) to standard fids (1:5)  #EL: this seems similar to beta for HL, calculating proportions of catch by fid for estimating catch by fid where there is no fid specified
 	## -------------------------------------------------------------------
 	.flush.cat("Allocating catch from unknown fid (code=0) to standard fids (catmod2) ...\n")
 	catmod2=catmod1[,,is.element(dimnames(catmod1)[[3]],1:5),,,drop=FALSE]
