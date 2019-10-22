@@ -2,19 +2,10 @@
 # 1. Extract catch data for all species of rockfish by year, fishery and major
 #    area from GF_MERGED_CATCH
 #-----------------------------------------------------------------------------
-library(gfdata)
-library(dplyr)
-# arguments for future function:
-rrf <- 442
+# library(gfdata)
 
 
-
-# set some variables
-trf <- gfdata::run_sql("GFFOS", "SELECT SPECIES_CODE, SPECIES_COMMON_NAME
-  FROM GFFOS.dbo.SPECIES
-  WHERE SPECIES_COMMON_NAME LIKE '%ROCKFISH%' OR SPECIES_SCIENTIFIC_NAME LIKE '%SEBASTES%'")
-trf <- trf$SPECIES_CODE
-orf <- setdiff(trf, 396) # I'm not certain whether ORF includes RRF or not TO DO
+# orf <- setdiff(trf, 396) # I'm not certain whether ORF includes RRF or not TO DO
 
 #-----------------------------------------------------------------------------
 # get all catch records
@@ -30,43 +21,58 @@ orf <- setdiff(trf, 396) # I'm not certain whether ORF includes RRF or not TO DO
 #' @examples
 get_gfmc_rf_catch <- function(foreign = FALSE,
   major = c("0", "00", "01", "03", "04", "05", "06", "07", "08", "09")) { # TO DO: need to get the unknown areas in here
+
   gfmc_catch_data <- here::here("data/all_gfmc_rf_catch.rds")
+
   if (file.exists(gfmc_catch_data)) {
-  d <- readRDS(gfmc_catch_data)
+    d <- readRDS(gfmc_catch_data)
   } else {
+    trf <- gfdata::run_sql("GFFOS", "SELECT SPECIES_CODE, SPECIES_COMMON_NAME
+  FROM GFFOS.dbo.SPECIES
+  WHERE SPECIES_COMMON_NAME LIKE '%ROCKFISH%' OR SPECIES_SCIENTIFIC_NAME LIKE '%SEBASTES%'")
+    trf <- trf$SPECIES_CODE
+
     d <- gfdata:::get_catch(trf) %>%
-      d2 <- d %>% select(database_name, fishery_sector, major_stat_area_code,
+      select(database_name, fishery_sector, major_stat_area_code,
         major_stat_area_name, year, trip_id, fishing_event_id, gear, best_depth,
         species_code, species_common_name, landed_kg:discarded_pcs) %>%
-     filter(major_stat_area_code %in% major) %>%
+      filter(major_stat_area_code %in% major) %>%
       mutate_if(is.numeric, list(~replace(., is.na(.),0))) %>%
       filter(!(landed_kg == 0 & landed_pcs == 0 & discarded_kg == 0 & discarded_pcs == 0))
 
+    saveRDS(d, gfmc_catch_data)
+}
     # group fishery sectors
     d$fishery_sector <- tolower(d$fishery_sector)
     d <- d %>% mutate(
       fishery_sector = case_when(
-        fishery_sector %in% c("rockfish inside", "rockfish outside", "zn", "k/zn") ~ "hlrock",
-        fishery_sector %in% c("halibut", "k/l", "halibut and sablefish") ~ "halibut",
-        fishery_sector %in% c("spiny dogfish", "lingcod", "schedule ii") ~ "dogling",
         fishery_sector %in% c("groundfish trawl") ~ "trawl",
+        fishery_sector %in% c("halibut", "k/l", "halibut and sablefish") ~ "halibut",
         fishery_sector %in% c("sablefish") ~ "sable",
+        fishery_sector %in% c("spiny dogfish", "lingcod", "schedule ii") ~ "dogling",
+        fishery_sector %in% c("rockfish inside", "rockfish outside", "zn", "k/zn") ~ "h&l",
         fishery_sector %in% c("foreign") ~ "foreign"
-      ))
-
+      )) %>% mutate(
+        fid = case_when(
+          fishery_sector %in% c("trawl") ~                          1,
+          fishery_sector %in% c("halibut") ~ 2,
+          fishery_sector %in% c("sable") ~ 3,
+          fishery_sector %in% c("dogling") ~ 4,
+          fishery_sector %in% c("h&l") ~ 5,
+          fishery_sector %in% c("combined") ~ 9
+        ))
     # TO DO: need to work out what to do with foreign catch (will differ based on species and fishery)
     if(!foreign){
       d <- d %>% filter(!fishery_sector %in% "foreign")
     }
-    saveRDS(d, "data/all_gfmc_rf_catch.rds")
-  }
+  d
 }
 
 
 # unique(d$major_stat_area_code)
 
 #-----------------------------------------------------------------------------
-# 2. Estimate average wt of fish caught by sector, area and species (and year if exists)
+# 2. Estimate average wt of rockfish species caught by sector, area and species (and year if exists)
 #    to use in estimating catch weights for catch count records
 #-----------------------------------------------------------------------------
 # calculate average wt/pc by year, fishery_sector and major area, and by
@@ -82,17 +88,11 @@ get_gfmc_rf_catch <- function(foreign = FALSE,
 #' @examples
 get_avg_wt <- function(dat = gfmc_rf_catch){
   dat %>%
-    select(year, fishery_sector, major_stat_area_code, species_code, landed_kg, landed_pcs) %>%
+    select(fid, major_stat_area_code, species_code, landed_kg, landed_pcs) %>%
     filter(landed_kg > 0 & landed_pcs > 0) %>%
     # calculate average kg per piece by sector, area and species
-    group_by(fishery_sector, major_stat_area_code, species_code) %>%
-    mutate(landed_kg_per_pc = mean(landed_kg/landed_pcs)) %>%
-    ungroup() %>%
-    # calculate average kg per piece by above plus year - TO DO: check logic of how this is applied in est_catch_by_pieces function
-    group_by(year, fishery_sector, major_stat_area_code, species_code, landed_kg_per_pc) %>%
-    summarise(landed_kg_per_pc_annual = mean(landed_kg/landed_pcs)) %>%
-    ungroup() %>%
-    mutate_if(is.numeric, list(~replace(., is.na(.),0)))
+    group_by(fid, major_stat_area_code, species_code) %>%
+    summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs))
 }
 
 
@@ -108,16 +108,15 @@ get_avg_wt <- function(dat = gfmc_rf_catch){
 #' @examples
 est_catch_by_pieces <- function(dat = gfmc_rf_catch, avg_wt = avg_wt){
   dat %>%
-    left_join(avg_wt, by = c("year", "fishery_sector", "major_stat_area_code", "species_code")) %>%
+    left_join(avg_wt, by = c("fid", "major_stat_area_code", "species_code")) %>%
     mutate_if(is.numeric, list(~replace(., is.na(.),0))) %>%
     mutate(
-      est_landed_kg = ifelse(landed_kg == 0, ifelse(
-        !landed_kg_per_pc_annual == 0, landed_pcs * landed_kg_per_pc_annual, landed_pcs * landed_kg_per_pc), landed_kg),
+      est_landed_kg =
+        ifelse(landed_kg == 0, landed_pcs * landed_kg_per_pc, landed_kg),
+      est_discarded_kg =
+        ifelse(discarded_kg == 0, discarded_pcs * landed_kg_per_pc, discarded_kg),
       best_landed_kg = ifelse(!landed_kg == 0, landed_kg, est_landed_kg),
-      est_discarded_kg = ifelse(discarded_kg == 0, ifelse(
-        !landed_kg_per_pc_annual == 0, discarded_pcs * landed_kg_per_pc_annual, discarded_pcs * landed_kg_per_pc), discarded_kg),
-      best_discarded_kg = ifelse(!discarded_kg == 0, discarded_kg, est_discarded_kg),
-      best_catch = best_landed_kg + best_discarded_kg
+      best_discarded_kg = ifelse(!discarded_kg == 0, discarded_kg, est_discarded_kg)
     )
 }
 
@@ -149,11 +148,11 @@ get_mod_catch <- function(dat = catch,
   trawl_yr = 1996,
   sable_yr = 2007){
   dat %>% filter(
-    (fishery_sector == "hlrock" & year >= hl_yr) |
-      (fishery_sector == "halibut" & year >= halibut_yr) |
-      (fishery_sector == "dogling" & year >= dogling_yr) |
-      (fishery_sector == "trawl" & year >= trawl_yr) |
-      (fishery_sector == "sable" & year >= sable_yr)
+    (fid == 1 & year >= trawl_yr) |
+      (fid == 2 & year >= halibut_yr) |
+      (fid == 3 & year >= sable_yr) |
+      (fid == 4 & year >= dogling_yr) |
+      (fid == 5 & year >= hl_yr)
   )
 }
 
@@ -170,13 +169,14 @@ get_mod_catch <- function(dat = catch,
 #' @export
 #'
 #' @examples
-get_mod_catch_sum <- function(dat = mod_catch){
+get_mod_catch_sum <- function(dat = mod_catch, rrf = spp){
   dat %>%
-    group_by(year, fishery_sector, major_stat_area_code) %>%
-    summarise(rrf_kg = sum(ifelse(species_code == rrf, best_catch, 0)),
-      orf_kg = sum(ifelse(!species_code == 396, best_catch, 0)),
-      pop_kg = sum(ifelse(species_code == 396, best_catch, 0)),
-      trf_kg = sum(best_catch)) %>%
+    group_by(year, fid, major_stat_area_code) %>%
+    summarise(landed_kg = sum(ifelse(species_code == rrf, best_landed_kg, 0)),
+      discarded_kg = sum(ifelse(species_code == rrf, best_discarded_kg, 0)),
+      orf_kg = sum(ifelse(!species_code == 396, best_landed_kg, 0)),
+      pop_kg = sum(ifelse(species_code == 396, best_landed_kg, 0)),
+      trf_kg = sum(best_landed_kg)) %>%
     ungroup()
 }
 
@@ -210,23 +210,25 @@ get_mod_catch_sum <- function(dat = mod_catch){
 #'
 #' @examples
 get_ref_catch <- function(dat = catch,
+  rrf = spp,
   hlrock_ref_yrs = 1997:2005,
   halibut_ref_yrs = 1997:2005,
   dogling_ref_yrs = 1997:2005,
   trawl_ref_yrs = 1997:2005,
   sable_ref_yrs = 1997:2005) {
   dat %>% filter(
-    (fishery_sector == "hlrock" & year %in% hlrock_ref_yrs) |
-      (fishery_sector == "halibut" & year %in% halibut_ref_yrs) |
-      (fishery_sector == "dogling" & year %in% dogling_ref_yrs) |
-      (fishery_sector == "trawl" & year %in% trawl_ref_yrs) |
-      (fishery_sector == "sable" & year %in% sable_ref_yrs)
+    (fid == 1 & year %in% trawl_ref_yrs) |
+      (fid == 2 & year %in% halibut_ref_yrs) |
+      (fid == 3 & year %in% sable_ref_yrs) |
+      (fid == 4 & year %in% dogling_ref_yrs) |
+      (fid == 5 & year %in% hlrock_ref_yrs)
   ) %>%
-    group_by(fishery_sector, major_stat_area_code) %>%
-    summarise(rrf_kg = sum(ifelse(species_code == rrf, best_catch, 0)),
-      orf_kg = sum(ifelse(!species_code == 396, best_catch, 0)),
-      pop_kg = sum(ifelse(species_code == 396, best_catch, 0)),
-      trf_kg = sum(best_catch)) %>%
+    group_by(fid, major_stat_area_code) %>%
+    summarise(landed_kg = sum(ifelse(species_code == rrf, best_landed_kg, 0)),
+      discarded_kg = sum(ifelse(species_code == rrf, best_discarded_kg, 0)),
+      orf_kg = sum(ifelse(!species_code == 396, best_landed_kg, 0)),
+      pop_kg = sum(ifelse(species_code == 396, best_landed_kg, 0)),
+      trf_kg = sum(best_landed_kg)) %>%
     ungroup()
 }
 
@@ -238,11 +240,17 @@ get_ref_catch <- function(dat = catch,
 # area by fishery sector
 
 #' Get gamma ratio
-#' Calculate ratio of RRF catch (landings + discards) to catch of prominent *** TO DO: maybe this should not include discards?
+#' Calculate ratios from modern catch statistics using reference years
+#' that refelct periods when information knowledge is high and/or stable.
+#' Gamma is the ratio of RRF catch (landings + discards) to catch of prominent *** TO DO: maybe this should not include discards?
 #' historical group (POP = Pacific Ocean perch, TRF = total rockfish, ORF =
 #' other rockfish than POP) by fishery sector and major area for specified
-#' reference years. Gamma in Rowan's reconstruction algorithm. (apply this to each historic year catch by fishery and area.
-#' Where area is unknown, use gamma_by_fishery ratio, and apply alpha - proportion of rrf in area/rrf in all areas - as well)
+#' reference years. (apply this to each historic year catch by fishery and area.
+#' Where area is unknown, use gamma and alpha).
+#' Alpha is the ratio, for each fishery, of rrf catch in each major area relative
+#' to rrf catch in all areas for reference years.
+#' Beta is the ratio for each major area of rrf catch in each fishery relative
+#' to catch in all fisheries
 #'
 #' @param dat
 #' @param prom Prominent historical group (POP = Pacific Ocean perch, TRF =
@@ -251,43 +259,29 @@ get_ref_catch <- function(dat = catch,
 #' @export
 #'
 #' @examples
-get_gamma <- function(dat = ref_catch, prom = 'orf') {
- dat %>%
-      group_by(fishery_sector, major_stat_area_code) %>%
-      mutate(gamma =
+get_ratios <- function(dat = ref_catch, prom = 'orf') {
+  gamma_alpha <- dat %>%
+    mutate(gamma =
         case_when(
-          prom == 'orf' ~ rrf_kg/orf_kg,
-          prom == 'pop' ~ rrf_kg/pop_kg,
-          prom == 'trf' ~ rrf_kg/trf_kg
-        )
-      ) %>% ungroup %>%
-    group_by(fishery_sector) %>%
-    mutate(gamma_by_fishery =
-        case_when(
-          prom == 'orf' ~ sum(rrf_kg)/sum(orf_kg),
-          prom == 'pop' ~ sum(rrf_kg)/sum(pop_kg),
-          prom == 'trf' ~ sum(rrf_kg)/sum(trf_kg)
-        )
-      )
-  }
-
-#' Get alpha ration
-#' Calculate rrf catch in each major area as a proportion of rrf catch in all
-#' areas for reference years
-#'
-#' @param dat
-#'
-#' @return
-#' @export
-#'
-#' @examples
-get_alpha <- function(dat = ref_catch) {
-  dat %>%
+          prom == 'orf' ~ landed_kg/orf_kg,
+          prom == 'pop' ~ landed_kg/pop_kg,
+          prom == 'trf' ~ landed_kg/trf_kg
+        )) %>%
     group_by(major_stat_area_code) %>%
-    mutate(sum_rrf_kg = sum(rrf_kg)) %>%
+    mutate(sum_rrf_kg = sum(landed_kg)) %>%
     ungroup() %>%
-    mutate(alpha = rrf_kg/sum_rrf_kg) %>%
+    mutate(alpha = landed_kg/sum_rrf_kg) %>%
     select(-sum_rrf_kg)
+
+  beta <- dat %>%
+    filter(fid %in% c(2, 4, 5)) %>%
+    group_by(fid) %>%
+    mutate(sum_rrf_kg = sum(landed_kg)) %>%
+    ungroup() %>%
+    mutate(beta = landed_kg/sum_rrf_kg) %>%
+    select(-sum_rrf_kg)
+
+  left_join(gamma_alpha, beta)
 }
 
 # #----------------------------------------------------------------------------- GOOD TO HERE
