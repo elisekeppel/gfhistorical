@@ -1,11 +1,11 @@
 #-----------------------------------------------------------------------------
 # 1. Extract catch data for all species of rockfish by year, fishery and major
-#    area from GF_MERGED_CATCH
+#    area from GF_MERGED_CATCH in GFFOS
 #-----------------------------------------------------------------------------
 # library(gfdata)
 
 
-# orf <- setdiff(trf, 396) # I'm not certain whether ORF includes RRF or not TO DO
+# orf <- setdiff(trf, 396)
 
 #-----------------------------------------------------------------------------
 # get all catch records
@@ -285,12 +285,13 @@ get_ratios <- function(dat = ref_catch, prom = 'orf') {
 }
 
 # #----------------------------------------------------------------------------- GOOD TO HERE
-# compare with Rowan's gamma and alpha ratios - figure out Rowan's beta ratio
+# compare with Rowan's gamma and alpha ratios
 
 
+#
 # TO DO: check Rowan's .rda file orfhistory.rda (might need to build orf from
 # the big, nasty spreadsheets... or at least code the steps done to from some
-# original documented historical catch file(s))
+# original documented historical catch file(s)) -- started - see US_historical_catch.R
 #
 # # calculate gamma ratios for each fishery and major area
 # for(i in fishery){

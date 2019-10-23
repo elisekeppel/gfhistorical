@@ -1,0 +1,21 @@
+EK Oct 23, 2019
+
+Commercial Trawl
+1930-1949 Landings
+
+To calculate US landings of ORF from BC waters (to add to Canadian landings):
+
+Step 1:
+Annual total landings of ORF in Washington from 1930-1964 were obtained from U.S. assessment (Ian Stewart). Stewart obtained the landings estimates from Pacific States Fish Commission Annual Reports and the Pacific Fisherman Yearbook. Annual US landings of ORF in major statistical areas 3C-5D from 1950-1975 were obtained from Ketchen 1976. 
+
+ 
+Step 2:
+Derived ratio of ORF in areas 3C – 5D = Washington ORF landings from areas 3C-5D combined/all Washington ORF landings from 1950-1953. This ratio was applied to annual WA total catches 1930-1949 to estimate annual landings of WA catch in BC waters.
+
+Step 3:
+The proportion of annual ORF landings in each of major areas 3C-5D out of the ORF landings in these areas combined was calculated from summed 1950-1953 data.
+These proportions were applied to annual WA ORF landings in BC waters 1930-1949 to estimate annual US ORF landings in each major area.
+
+TO TO:
+removing US part of 3C
+Stanley derived estimate of proportion of 3C landings in Canadian waters from 1966-1970 (Tagart and Kimura 1982, p. 20) and applied this to 1930-1949 3C landings for Canary rockfish. This resulted in 29% of 3C landings in CDN waters. Don't see this in reconstruction algorithm but email from Rowan stating these 3C adjustments were already made (where? in spreadsheet?) and area reflected in orfhistory?

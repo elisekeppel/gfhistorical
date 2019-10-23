@@ -1,5 +1,7 @@
 load_all("../gfdata")
 library(dplyr)
+library(tidyverse)
+library(readxl)
 
 load("data/ph3dat.rda")
 load("data/orfhistory.rda")
@@ -25,6 +27,13 @@ mod_catch_sum <- get_mod_catch_sum(mod_catch)
 ref_catch <- get_ref_catch(catch)
 ratios <- get_ratios(prom = 'orf')
 
+#-------------------------------------------------------------------------------
+# Historic catch
+#-------------------------------------------------------------------------------
+
+# US historic catch from Rowan Haigh "Catch-Historical.xlx" spreadsheet
 
 
+us_orf_catch <- get_US_ORF_catch()
 
+# NEXT: even out consistent use of units - tonnes? kg? lbs?
