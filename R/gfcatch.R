@@ -90,9 +90,14 @@ get_avg_wt <- function(dat = gfmc_rf_catch){
   dat %>%
     select(fid, major_stat_area_code, species_code, landed_kg, landed_pcs) %>%
     filter(landed_kg > 0 & landed_pcs > 0) %>%
-    # calculate average kg per piece by sector, area and species
     group_by(fid, major_stat_area_code, species_code) %>%
-    summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs))
+    summarise(landed_kg_per_pc = mean(landed_kg/landed_pcs)) %>%
+  # calculate average kg per piece by sector, area and species
+    ungroup() %>%
+    group_by(species_code) %>%
+    mutate(ci=list(mean_cl_normal(landed_kg_per_pc, conf.int=.90))) %>%
+    unnest() %>%
+    filter(landed_kg_per_pc > ymin & landed_kg_per_pc < ymax)
 }
 
 
@@ -112,9 +117,9 @@ est_catch_by_pieces <- function(dat = gfmc_rf_catch, avg_wt = avg_wt){
     mutate_if(is.numeric, list(~replace(., is.na(.),0))) %>%
     mutate(
       est_landed_kg =
-        ifelse(landed_kg == 0, landed_pcs * landed_kg_per_pc, landed_kg),
+        ifelse(landed_kg == 0, landed_pcs * landed_kg_per_pc, 0),
       est_discarded_kg =
-        ifelse(discarded_kg == 0, discarded_pcs * landed_kg_per_pc, discarded_kg),
+        ifelse(discarded_kg == 0, discarded_pcs * landed_kg_per_pc, 0),
       best_landed_kg = ifelse(!landed_kg == 0, landed_kg, est_landed_kg),
       best_discarded_kg = ifelse(!discarded_kg == 0, discarded_kg, est_discarded_kg)
     )
@@ -131,11 +136,11 @@ est_catch_by_pieces <- function(dat = gfmc_rf_catch, avg_wt = avg_wt){
 #' Get modern rockfish catch - data for trusted years by each fishery
 #'
 #' @param dat
-#' @param hl_yr
-#' @param halibut_yr
-#' @param dogling_yr
-#' @param trawl_yr
-#' @param sable_yr
+#' @param hl_yr First trusted year for hook and line rockfish fleet data
+#' @param halibut_yr First trusted year for halibut fleet data
+#' @param dogling_yr First trusted year for dogfish/lingcod fleet data
+#' @param trawl_yr First trusted year for halibut fleet data
+#' @param sable_yr First trusted year for halibut fleet data
 #'
 #' @return
 #' @export

@@ -31,7 +31,7 @@ get_orf_history <- function(){
   orf_yamanaka <- yamanaka %>%
     gather('1', '3', '4', '5', '6', '7', '8', '9', key = major, value = catch) %>%
     mutate(
-      landings = as.numeric(catch),
+      landings = as.numeric(catch)*1000, # convert tons to kg
       spp = '391',
       nation = 'CA',
       units = "kg",
@@ -52,7 +52,7 @@ get_orf_history <- function(){
     select(-catch)
 
   orf_ketchen76 <- ketchen76 %>%
-    mutate(landings = catch/2.20462,
+    mutate(landings = catch/2.20462, # convert lbs to kg
       units = "kg",
       source = "ketchen76",
       fishery = "trawl",
@@ -62,7 +62,7 @@ get_orf_history <- function(){
   orf_obradovich <- obradovich %>%
     gather('1', '2', '3', '4', '5', '6', '7', '8', '9', key = major, value = catch) %>%
     mutate(
-      landings = as.numeric(catch)*1000,
+      landings = as.numeric(catch)*1000, # convert tons to kg
       spp = '391',
       nation = 'CA',
       units = "kg",
@@ -82,7 +82,7 @@ get_orf_history <- function(){
     select(-c(catch, gear))
 
   orf_ketchen80 <- ketchen80 %>%
-    mutate(landings = catch*1000,
+    mutate(landings = catch*1000, # convert tons to kg
       units = "kg",
       source = "ketchen80",
       fishery = "trawl",
@@ -90,7 +90,7 @@ get_orf_history <- function(){
     select(-catch)
 
 orf_leaman80 <- leaman80 %>%
-  mutate(landings = catch*1000,
+  mutate(landings = catch*1000, # convert tons to kg
     units = "kg",
     source = "leaman80",
     fishery = "trawl",
