@@ -1,14 +1,18 @@
-# This is to get the historical rockfish catch data (us & can)
+# This is to get the historical rockfish catch data (Cdn, US & foreign)
 # Author: Elise Keppel
-# Created: September 2019
+# Last edited: November 2019
 
 get_orf_history <- function(){
-  # import raw US catch data from Catch-Historical.xls spreadsheet from Rowan Haigh
+  # Import raw catch data from Catch-Historical.xls spreadsheet from Rowan Haigh
+  #   containing orf/pop landings from various sources. Convert all landings
+  #   to kg and arrange in similar format.
+  # Note that the number of Yamanaka and Obradovich records differ from Rowan Haigh's orfhistory due to his
+  # multiple lines for catch in a given major area divided up by regions D1-3)
   ketchen76 <- read_xls("inst/extdata/Catch-Historical.xls", sheet = "Ketchen76", range = "A4:G614")
 
-  stewart <- read_xls("inst/extdata/Catch-Historical.xls",
+  stewart <- suppressMessages(read_xls("inst/extdata/Catch-Historical.xls",
     sheet = "Stewart",
-    range = "I4:O36")
+    range = "I4:O36"))
 
   yamanaka <- read_xls("inst/extdata/Catch-Historical.xls",
     sheet = "Yamanaka",
@@ -26,18 +30,14 @@ get_orf_history <- function(){
     sheet = "Leaman80",
     range = "A3:G67")
 #-----------------------------------------------------------------------------------
-  # bring in raw orf landings
+
   names(yamanaka) <- c('year', 1, 3, 4, 5, 6, 7, 8, 9)
   orf_yamanaka <- yamanaka %>%
     gather('1', '3', '4', '5', '6', '7', '8', '9', key = major, value = catch) %>%
     mutate(
-      landings = as.numeric(catch)*1000, # convert tons to kg
+      year = year,
       spp = '391',
-      nation = 'CA',
-      units = "kg",
-      source = "yamanaka",
-      fishery = "combined",
-      action = "add",
+      major = major,
       region = case_when(
         major == 1 ~ '4B',
         major == 2 ~ '4A',
@@ -47,28 +47,30 @@ get_orf_history <- function(){
         major == 6 ~ '5B',
         major == 7 ~ '5C',
         major == 8 ~ '5D',
-        major == 9 ~ '5E')
+        major == 9 ~ '5E'),
+      nation = 'CA',
+      landings = as.numeric(catch)*1000, # convert tons to kg
+      units = "kg",
+      source = "yamanaka",
+      action = "add",
+      fishery = "combined"
       ) %>%
     select(-catch)
 
   orf_ketchen76 <- ketchen76 %>%
-    mutate(landings = catch/2.20462, # convert lbs to kg
+    mutate(landings = catch/2.20462, # convert lbs to kg (off by a little from Rowan's)
       units = "kg",
       source = "ketchen76",
       fishery = "trawl",
       action = "max") %>%
-    select(-catch)
+    select(year:nation, landings, units, source, action, fishery)
 
   orf_obradovich <- obradovich %>%
     gather('1', '2', '3', '4', '5', '6', '7', '8', '9', key = major, value = catch) %>%
     mutate(
-      landings = as.numeric(catch)*1000, # convert tons to kg
+      year = year,
       spp = '391',
-      nation = 'CA',
-      units = "kg",
-      source = "obradovich",
-      fishery = "trawl",
-      action = "max",
+      major = major,
       region = case_when(
         major == 1 ~ '4B',
         major == 2 ~ '4A',
@@ -78,7 +80,15 @@ get_orf_history <- function(){
         major == 6 ~ '5B',
         major == 7 ~ '5C',
         major == 8 ~ '5D',
-        major == 9 ~ '5E')) %>%
+        major == 9 ~ '5E'),
+      nation = 'CA',
+      landings = as.numeric(catch)*1000, # convert tons to kg
+      units = "kg",
+      source = "obradovich",
+      action = "max",
+      fishery = gear
+      ) %>%
+    filter(!is.na(landings)) %>%
     select(-c(catch, gear))
 
   orf_ketchen80 <- ketchen80 %>%
@@ -87,7 +97,7 @@ get_orf_history <- function(){
       source = "ketchen80",
       fishery = "trawl",
       action = "add") %>%
-    select(-catch)
+    select(year:nation, landings, units, source, action, fishery)
 
 orf_leaman80 <- leaman80 %>%
   mutate(landings = catch*1000, # convert tons to kg
@@ -95,7 +105,7 @@ orf_leaman80 <- leaman80 %>%
     source = "leaman80",
     fishery = "trawl",
     action = "add") %>%
-  select(-catch)
+  select(year:nation, landings, units, source, action, fishery)
 
 #----------------------------------------------------------------------------------
  # estimate US ORF landings by major areas 3CD5ABCD for 1930-1964 using ratios calculated from ketchen76 1950-1953 area landings data and US total landings data
@@ -161,9 +171,3 @@ orf_leaman80 <- leaman80 %>%
   }
 
 
-get_pop_history <-
-
-get_orf_1950_1975 <- function(){
-  ketchen76 <- read_xls("inst/extdata/Catch-Historical.xls", sheet = "Ketchen76", range = "A4:G614")
-  ketchen76 %>% mutate(catch = catch/2.20462, units = "kg")
-  }
