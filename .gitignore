@@ -1,4 +1,5 @@
 .Rproj.user
 .Rhistory
 .RData
-all_gfmc_rf_catch.rds
+*.rds
+*.xls
