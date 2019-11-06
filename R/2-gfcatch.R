@@ -245,8 +245,8 @@ get_ref_catch <- function(dat = catch,
 # area by fishery sector
 
 #' Get gamma ratio
-#' Calculate ratios from modern catch statistics using reference years
-#' that refelct periods when information knowledge is high and/or stable.
+#' Calculate ratios of RRF:ORF (or TRF/POP) from modern catch statistics using reference years
+#' that refelct periods when information/knowledge is high and/or stable.
 #' Gamma is the ratio of RRF catch (landings + discards) to catch of prominent *** TO DO: maybe this should not include discards?
 #' historical group (POP = Pacific Ocean perch, TRF = total rockfish, ORF =
 #' other rockfish than POP) by fishery sector and major area for specified
