@@ -1,6 +1,6 @@
 EK Oct 23, 2019
 
-Commercial Trawl
+#Commercial Trawl
 1930-1949 Landings
 
 To calculate US landings of ORF from BC waters (to add to Canadian landings):
@@ -19,3 +19,14 @@ These proportions were applied to annual WA ORF landings in BC waters 1930-1949 
 TO TO:
 removing US part of 3C
 Stanley derived estimate of proportion of 3C landings in Canadian waters from 1966-1970 (Tagart and Kimura 1982, p. 20) and applied this to 1930-1949 3C landings for Canary rockfish. This resulted in 29% of 3C landings in CDN waters. Don't see this in reconstruction algorithm but email from Rowan stating these 3C adjustments were already made (where? in spreadsheet?) and area reflected in orfhistory?
+
+
+
+
+
+#Changes to Rowan's algorithm
+1. used 2.20462 for conversion from lbs to kg for ketchen76 (and others in 
+  spreadsheet) (RH used 2.2059 for ketchen76, and some combination of different 
+  conversion factors used in Yamanaka, off by a small bit in Stewart as well)
+2. removed major areas 2, 10, 67 and 68 from orfhistory
+

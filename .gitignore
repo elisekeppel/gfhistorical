@@ -5,3 +5,4 @@
 *.xls
 R/M07_CatchRecon_EK.r
 R/variables_RH.R
+*.sql
