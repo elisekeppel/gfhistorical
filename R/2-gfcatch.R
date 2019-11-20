@@ -8,7 +8,7 @@
 # orf <- setdiff(trf, 396)
 
 #-----------------------------------------------------------------------------
-# get all catch records
+# get all rf catch records from GF_MERGED_CATCH table
 #-----------------------------------------------------------------------------
 #' Title
 #'
@@ -95,8 +95,8 @@ get_avg_wt <- function(dat = gfmc_rf_catch){
   # calculate average kg per piece by sector, area and species
     ungroup() %>%
     group_by(species_code) %>%
-    mutate(ci=list(mean_cl_normal(landed_kg_per_pc, conf.int=.90))) %>%
-    unnest() %>%
+    mutate(ci=list(ggplot2::mean_cl_normal(landed_kg_per_pc, conf.int=.90))) %>%
+    unnest(cols = c(ci)) %>%
     filter(landed_kg_per_pc > ymin & landed_kg_per_pc < ymax)
 }
 
@@ -147,11 +147,11 @@ est_catch_by_pieces <- function(dat = gfmc_rf_catch, avg_wt = avg_wt){
 #'
 #' @examples
 get_mod_catch <- function(dat = catch,
-  hl_yr = 1986,
-  halibut_yr = 2000,
-  dogling_yr = 2007,
   trawl_yr = 1996,
-  sable_yr = 2007){
+  halibut_yr = 2000,
+  sable_yr = 2007,
+  dogling_yr = 2007,
+  hl_yr = 1986){
   dat %>% filter(
     (fid == 1 & year >= trawl_yr) |
       (fid == 2 & year >= halibut_yr) |
@@ -247,15 +247,17 @@ get_ref_catch <- function(dat = catch,
 #' Get gamma ratio
 #' Calculate ratios of RRF:ORF (or TRF/POP) from modern catch statistics using reference years
 #' that refelct periods when information/knowledge is high and/or stable.
-#' Gamma is the ratio of RRF catch (landings + discards) to catch of prominent *** TO DO: maybe this should not include discards?
+#' Gamma is the ratio of RRF catch (landings) to catch of prominent
 #' historical group (POP = Pacific Ocean perch, TRF = total rockfish, ORF =
 #' other rockfish than POP) by fishery sector and major area for specified
 #' reference years. (apply this to each historic year catch by fishery and area.
 #' Where area is unknown, use gamma and alpha).
 #' Alpha is the ratio, for each fishery, of rrf catch in each major area relative
-#' to rrf catch in all areas for reference years.
+#' to rrf catch in all areas for reference years (to be applied to historic
+#' catch where major is unknown).
 #' Beta is the ratio for each major area of rrf catch in each fishery relative
-#' to catch in all fisheries
+#' to catch in all fisheries (to be applied to historic catch where major
+#' is unknown).
 #'
 #' @param dat
 #' @param prom Prominent historical group (POP = Pacific Ocean perch, TRF =

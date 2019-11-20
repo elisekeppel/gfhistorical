@@ -2,7 +2,7 @@
 # Author: Elise Keppel
 # Last edited: November 2019
 
-get_orf_history <- function(){
+get_orf_history <- function(foreign = FALSE){
   # Import raw catch data from Catch-Historical.xls spreadsheet from Rowan Haigh
   #   containing orf/pop landings from various sources. Convert all landings
   #   to kg and arrange in similar format.
@@ -172,12 +172,13 @@ get_orf_history <- function(){
   #     to extract this.
   gfcatch53 <- orfhistory %>% filter(source == 'GFCatch', year <1954) %>%
     mutate(units = "kg")
-  gfcatch54 <- orfhistory %>% filter(source == 'GFCatch', year >1953) %>%
+  gfcatch54 <- orfhistory %>% filter(source == 'GFCatch', year >1953) %>% # TO DO: recreate gfcatch 1954+
     mutate(units = "kg")
-  pacharv3 <- orfhistory %>% filter(source == 'PacHarv3') %>%
+  pacharv3 <- orfhistory %>% filter(source == 'PacHarv3') %>% # TO DO: recreate pacharv3
     mutate(units = "kg")
   orf <- rbind(orf_yamanaka, orf_ketchen76, orf_obradovich, orf_ketchen80,
     orf_leaman80, bc_us_landings_by_area, gfcatch53, gfcatch54, pacharv3)
+  orf <- if(!foreign) {filter(orf, nation %in% c("CA", "US"))}
 }
 
 

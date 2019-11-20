@@ -1,13 +1,4 @@
-devtools::load_all("../gfdata")
-library(dplyr)
-library(tidyverse)
-library(tidyr)
-library(readxl)
-#source("R/gfcatch.R")
 
-load("data/ph3dat.rda")
-load("data/orfhistory.rda")
-load("data/rrfhistory.rda")
 spp = '442'
 
 # use gfdata to get all rockfish catch from gffos merged catch table
@@ -30,14 +21,25 @@ avg_wt <- get_avg_wt(gfmc_rf_catch)
 catch <- est_catch_by_pieces(gfmc_rf_catch, avg_wt = avg_wt)
 # sum(catch$best_landed_kg==0)
 
-# Get modern catch (landings) for trusted years
-mod_catch <- get_mod_catch(catch)
-# Now subset modern catch for species of interest
+# Get modern catch (landings) for trusted years (currently using PBS default for first trusted year for each fishery)
+mod_catch <- get_mod_catch(catch,
+  trawl_yr = 1996,
+  halibut_yr = 2000,
+  sable_yr = 2007,
+  dogling_yr = 2007,
+  hl_yr = 1986)
+# Now subset modern catch for species of interest by year, fid and major
 mod_catch_sum <- get_mod_catch_sum(mod_catch)
 
 
-# Subset modern catch by reference years for calculating ratios
-ref_catch <- get_ref_catch(catch)
+# Subset catch by reference years for calculating ratios ---> TO DO: these should maybe be adjusted by the 'trusted' modern catch above??
+ref_catch <- get_ref_catch(catch,
+  rrf = 442,
+  trawl_ref_yrs = 1997:2005,
+  halibut_ref_yrs = 1997:2005,
+  sable_ref_yrs = 1997:2005,
+  dogling_ref_yrs = 1997:2005,
+  hlrock_ref_yrs = 1997:2005)
 ratios <- get_ratios(prom = 'orf')
 # These ratios can be applied to historic ORF, POP or TRF landings to
 #   estimate historic RRF catch
@@ -54,9 +56,37 @@ ratios <- get_ratios(prom = 'orf')
 # Some data are addititve while others are redundant (of which the max will be used).
 # Contains historic Cdn, US and foreign catch of ORF.
 # Also contains some POP (396) records.
-orf_history <- get_orf_history()
+orf_history <- get_orf_history() # extra nations have been filtered out (need to filter majors for only BC waters, nations for CA and US catches, TO DO: discards not yet considered)
 
-# TO DO: currently orf_history includes other majors than 1, 3:9
+orf_history_max <- orf_history %>%
+  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9), action == 'max') %>%
+  group_by(year, major, nation, fishery, source) %>%
+  summarise(catch_kg = sum(catch)) %>%
+  ungroup() %>%
+  group_by(year, major, nation, fishery) %>%
+  mutate(catch_kg = max(catch_kg)) %>%
+  ungroup() %>%
+  unique()
+
+orf_history_add <- orf_history %>%
+  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9), action == 'add') %>%
+  group_by(year, major, nation, fishery, source) %>%
+  summarise(catch_kg = sum(catch)) %>%
+  ungroup() %>%
+  mutate(catch_kg = max(catch_kg)) %>%
+  ungroup() %>%
+  unique()
+
+orf_history_all_catch <- rbind(orf_history_max, orf_history_add) %>%
+  group_by(year, major, nation, fishery) %>%
+  summarise(catch_kg = sum(catch_kg))
+
+
+
+
+#-------------------------------------------------------------------------------
+# STILL TO DO FOR ORFHISTORY
+#-------------------------------------------------------------------------------
 # TO DO: re-code gfcatch (pre and post 1954) & pacharv3 for orf_history (in 1-orfhistory.R)
 # for now, use RH orfhistory gfcatch & pacharv3
 # see Haigh and Yamanaka 2011 Appendix A for RH queries
@@ -65,12 +95,36 @@ orf_history <- get_orf_history()
 # likely want to remove these as not in Cdn waters
 # not sure if RH removed at any point in his code
 
+# TO DO: Why are pacharvhl, pacharvsable, others included in orfhistory? no old years?
+
+# TO DO: could recalculate Lynne's and Ketchen/Stewart values with consistent use of conversion factors/rounding
 # TO DO: check if catch = (landings + discards) or landings only reported in orf_history? orfhistory?
 # TO DO: decide on consistent converstion factor b/w lbs and kg (Yamanaka uses 2.205/2.20459, Ketchen/Stewart use 2.20462/2.204623...)
 # for now keeping as close to RH as possible
+# TO DO: for 1918 to 1949, ORF = TRF (POP not yet reported separately)
+# need to use regression of ORF against TRF landings 1953-1995 data excluding
+# anomalous 1966 data point and transform data into log2 space to reduce positive skew (RH pg. 5)
 
 #-------------------------------------------------------------------------------
+# Apply ratios to orfhistory
+#-------------------------------------------------------------------------------
 
+# filter orf_history for major in (1, 3:9) & orf/pop/trf
+
+orf <- orf_history %>%
+  if(prom == 'orf') {
+    filter(spp == 391)}
+if(prom == 'pop'){
+  filter(spp == 396)}
+
+# filter
+
+# 2. apply alpha to catch for each fid where major = 0, then apply gamma
+
+
+
+# 3. apply beta to catch for each major where fid is unknown, then apply gamma
+# 1. apply gamma to catch for each combo of fid and major
 
 
 # LATER: bring in "modern" discards by fishery, year

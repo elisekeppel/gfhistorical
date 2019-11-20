@@ -17,4 +17,6 @@ Imports: dplyr,
   tidyr,
   DBI,
   magrittr,
-  lubridate
+  lubridate,
+  readxl,
+  ggplot2
