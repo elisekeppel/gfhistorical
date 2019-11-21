@@ -58,34 +58,27 @@ ratios <- get_ratios(prom = 'orf')
 # Also contains some POP (396) records.
 orf_history <- get_orf_history() # extra nations have been filtered out (need to filter majors for only BC waters, nations for CA and US catches, TO DO: discards not yet considered)
 
+# select maximum catch from redundant data sources for each year, fishery, major, nation
 orf_history_max <- orf_history %>%
-  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9,0), action == 'max') %>%
+  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9,0), action == 'max') %>% #filter out pop records TO DO: some of these may be necessary to bring in from before pop was sep'd out
   group_by(year, major, nation, fishery, source) %>%
   summarise(catch_kg = sum(catch)) %>%
   ungroup() %>%
   group_by(year, major, nation, fishery) %>%
-  mutate(catch_kg = max(catch_kg)) %>%
-  ungroup() %>%
-  unique()
+  slice(which.max(catch_kg)) %>%
+  ungroup()
 
+# roll up catch from additive data sources by
 orf_history_add <- orf_history %>%
   filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9,0), action == 'add') %>%
   group_by(year, major, nation, fishery, source) %>%
   summarise(catch_kg = sum(catch)) %>%
-  ungroup() %>%
-  mutate(catch_kg = max(catch_kg)) %>%
-  ungroup() %>%
-  unique()
+  ungroup()
 
 orf_history_all_orf_catch <- rbind(orf_history_max, orf_history_add) %>%
   group_by(year, major, fishery) %>%
   summarise(orf_kg = sum(catch_kg))
-# %>%
-#   mutate(fid =
-#       case_when(
-#         fishery = "trawl" ~ 1,
-#         fishery = "h&l" ~
-#       ))
+
 
 
 # apply ratios for rrf to orf - start with trawl data
