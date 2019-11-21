@@ -59,7 +59,7 @@ ratios <- get_ratios(prom = 'orf')
 orf_history <- get_orf_history() # extra nations have been filtered out (need to filter majors for only BC waters, nations for CA and US catches, TO DO: discards not yet considered)
 
 orf_history_max <- orf_history %>%
-  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9), action == 'max') %>%
+  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9,0), action == 'max') %>%
   group_by(year, major, nation, fishery, source) %>%
   summarise(catch_kg = sum(catch)) %>%
   ungroup() %>%
@@ -69,7 +69,7 @@ orf_history_max <- orf_history %>%
   unique()
 
 orf_history_add <- orf_history %>%
-  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9), action == 'add') %>%
+  filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9,0), action == 'add') %>%
   group_by(year, major, nation, fishery, source) %>%
   summarise(catch_kg = sum(catch)) %>%
   ungroup() %>%
@@ -77,12 +77,44 @@ orf_history_add <- orf_history %>%
   ungroup() %>%
   unique()
 
-orf_history_all_catch <- rbind(orf_history_max, orf_history_add) %>%
-  group_by(year, major, nation, fishery) %>%
-  summarise(catch_kg = sum(catch_kg))
+orf_history_all_orf_catch <- rbind(orf_history_max, orf_history_add) %>%
+  group_by(year, major, fishery) %>%
+  summarise(orf_kg = sum(catch_kg))
+# %>%
+#   mutate(fid =
+#       case_when(
+#         fishery = "trawl" ~ 1,
+#         fishery = "h&l" ~
+#       ))
 
 
+# apply ratios for rrf to orf - start with trawl data
+trawl <- orf_history_all_orf_catch %>%
+  filter(fishery == "trawl") %>%
+  mutate(fid = 1) %>%
+  left_join(ratios) %>%
+  mutate(
+    est_catch = case_when(
+      major %in% c(1,3,4,5,6,7,8,9) ~ orf_kg * gamma
+    )
+  )
 
+trap <- orf_history_all_orf_catch %>%
+  filter(fishery == "trap") %>%
+  mutate(fid = 3) %>%
+  left_join(ratios) %>%
+  mutate(
+    est_catch = case_when(
+      major %in% c(1,3,4,5,6,7,8,9) ~ orf_kg * gamma
+    )
+  )
+
+  mutate('rrf' = orf_kg*ratios$gamma[which(area_ratios$major == 3)])
+  mutate(rrf_kg =
+      case_when(
+        fishery = "trawl" ~ orf_kg*ratios$gamma[fid]
+          )
+  inner_join(ratios)
 
 #-------------------------------------------------------------------------------
 # STILL TO DO FOR ORFHISTORY

@@ -277,18 +277,20 @@ get_ratios <- function(dat = ref_catch, prom = 'orf') {
     group_by(major_stat_area_code) %>%
     mutate(sum_rrf_kg = sum(landed_kg)) %>%
     ungroup() %>%
-    mutate(alpha = landed_kg/sum_rrf_kg) %>%
-    select(-sum_rrf_kg)
+    mutate(alpha = landed_kg/sum_rrf_kg,
+      major = as.numeric(major_stat_area_code)) %>%
+    select(1,8,10,11)
 
   beta <- dat %>%
     filter(fid %in% c(2, 4, 5)) %>%
     group_by(fid) %>%
     mutate(sum_rrf_kg = sum(landed_kg)) %>%
     ungroup() %>%
-    mutate(beta = landed_kg/sum_rrf_kg) %>%
-    select(-sum_rrf_kg)
+    mutate(beta = landed_kg/sum_rrf_kg,
+      major = as.numeric(major_stat_area_code)) %>%
+    select(1,9,10)
 
-  left_join(gamma_alpha, beta)
+ u <-  left_join(gamma_alpha, beta)
 }
 
 # #----------------------------------------------------------------------------- GOOD TO HERE
