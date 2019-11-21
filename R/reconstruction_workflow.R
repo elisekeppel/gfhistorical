@@ -58,7 +58,12 @@ ratios <- get_ratios(prom = 'orf')
 # Also contains some POP (396) records.
 orf_history <- get_orf_history() # extra nations have been filtered out (need to filter majors for only BC waters, nations for CA and US catches, TO DO: discards not yet considered)
 
+#-------------------------------------------------------------------------------
+# combine historic data sources for final annual catch by fishery, major area
+#-------------------------------------------------------------------------------
+
 # select maximum catch from redundant data sources for each year, fishery, major, nation
+# TO DO: do we need to keep/use the other majors?
 orf_history_max <- orf_history %>%
   filter(spp == 391, major %in% c(1,3,4,5,6,7,8,9,0), action == 'max') %>% #filter out pop records TO DO: some of these may be necessary to bring in from before pop was sep'd out
   group_by(year, major, nation, fishery, source) %>%
@@ -75,40 +80,90 @@ orf_history_add <- orf_history %>%
   summarise(catch_kg = sum(catch)) %>%
   ungroup()
 
-orf_history_all_orf_catch <- rbind(orf_history_max, orf_history_add) %>%
+# combine max and additive historic data sources for complete orf history
+orf_history_complete <- rbind(orf_history_max, orf_history_add) %>%
   group_by(year, major, fishery) %>%
   summarise(orf_kg = sum(catch_kg))
 
 
 
-# apply ratios for rrf to orf - start with trawl data
-trawl <- orf_history_all_orf_catch %>%
-  filter(fishery == "trawl") %>%
-  mutate(fid = 1) %>%
-  left_join(ratios) %>%
-  mutate(
-    est_catch = case_when(
-      major %in% c(1,3,4,5,6,7,8,9) ~ orf_kg * gamma
-    )
-  )
+# apply ratios for rrf to orf
+# first estimate fid 2,4,5 catch (halibut, dogfish/lingcod and rf catch) by applying beta to h&l fishery catch
+hl <- orf_history_complete %>%
+  filter(fishery == "h&l") %>%
+  right_join(ratios %>% select(fid, major, beta) %>% filter(fid %in% c(2,4,5))) %>%
+  mutate(orf_kg = orf_kg * beta)
 
-trap <- orf_history_all_orf_catch %>%
-  filter(fishery == "trap") %>%
-  mutate(fid = 3) %>%
-  left_join(ratios) %>%
-  mutate(
-    est_catch = case_when(
-      major %in% c(1,3,4,5,6,7,8,9) ~ orf_kg * gamma
-    )
-  )
-
-  mutate('rrf' = orf_kg*ratios$gamma[which(area_ratios$major == 3)])
-  mutate(rrf_kg =
+# bring expanded hl fishery data back into orf_hisroty
+rrf_history <- orf_history_complete %>%
+  filter(!fishery == "h&l") %>%
+  mutate(fid =
       case_when(
-        fishery = "trawl" ~ orf_kg*ratios$gamma[fid]
-          )
-  inner_join(ratios)
+        fishery == "trawl" ~ 1,
+        fishery == "trap" ~ 3,
+        fishery == "combined" ~ 9)) %>%
+  union(hl %>% select(-beta)) %>%
+  left_join(ratios %>% select(-beta)) %>%
+  mutate(est_catch_kg =
+      case_when(
+        major == 0 ~ orf_kg * gamma * alpha,
+        !major == 0 ~ orf_kg * gamma)) %>%
+  ungroup()
 
+
+#-------------------------------------------------------------------------------
+# combine historic and modern catch
+#-------------------------------------------------------------------------------
+
+# arrange modern catch data
+mod_catch_input <- mod_catch_sum %>%
+  select(year, fid, major, catch_kg = as.integer(landed_kg))
+hist_catch_input <- rrf_history %>%
+  select(year, fid, major, catch_kg = as.integer(est_catch_kg))
+
+glimpse(rrf_history)
+glimpse(mod_catch_sum)
+d <- rbind(mod_catch_input, hist_catch_input) %>%
+  mutate(fishery =
+      case_when(
+        fid == 1 ~ "Trawl",
+        fid == 2 ~ "Halibut",
+        fid == 3 ~ "Sablefish",
+        fid == 4 ~ "Dogfish/Lingcod",
+        fid == 5 ~ "HL_Rockfish",
+        fid == 9 ~ "Combined"
+      )) %>%
+  mutate(major_stat_area =
+      case_when(
+        major == 0 ~ "unknown",
+        major == 1 ~ "4B",
+        major == 3 ~ "3C",
+        major == 4 ~ "3D",
+        major == 5 ~ "5A",
+        major == 6 ~ "5B",
+        major == 7 ~ "5C",
+        major == 8 ~ "5D",
+        major == 9 ~ "5E"
+      ))
+# take a peek
+
+c <- rev(unique(d$major_stat_area))
+pal <- RColorBrewer::brewer.pal(n = length(c), name = "Set1")
+year_range <- c(min(d$year), max(d$year))
+
+
+d %>%
+  filter(!is.na(major_stat_area)) %>%
+  ggplot(aes(year, catch_kg, colour = major_stat_area, fill = major_stat_area)) +
+  geom_col() +
+  theme_pbs() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  scale_fill_manual(values = pal, drop = FALSE, breaks = c,
+    labels = c) +
+  scale_colour_manual(values = pal, drop = FALSE, breaks = c,
+    labels = c) +
+  scale_x_discrete(breaks = seq(1920, year_range[2], 5)) +
+  facet_wrap(vars(fishery), scales = "free")
 #-------------------------------------------------------------------------------
 # STILL TO DO FOR ORFHISTORY
 #-------------------------------------------------------------------------------
@@ -134,31 +189,16 @@ trap <- orf_history_all_orf_catch %>%
 # Apply ratios to orfhistory
 #-------------------------------------------------------------------------------
 
-# filter orf_history for major in (1, 3:9) & orf/pop/trf
+# Apply ratios to historic catch
 
-orf <- orf_history %>%
-  if(prom == 'orf') {
-    filter(spp == 391)}
-if(prom == 'pop'){
-  filter(spp == 396)}
+# 1. filter orf_history for major in (1, 3:9) & orf(/pop/trf) - currently using orf only
 
-# filter
+# 2. apply beta to catch for each major where fishery is h&l, then apply gamma
+# 3. apply gamma to catch for each combo of fid and major (except major = 0)
+# 4. apply alpha and gamma to catch for each fid where major = 0
 
-# 2. apply alpha to catch for each fid where major = 0, then apply gamma
-
-
-
-# 3. apply beta to catch for each major where fid is unknown, then apply gamma
-# 1. apply gamma to catch for each combo of fid and major
-
-
-# LATER: bring in "modern" discards by fishery, year
-# bring in "historic" discards (calculate ratio from trusted years)
-
-# deal with foreign catch
-
-# apply ratios to historic catch
-
-# have modern and historic catch in same format
-
-# merge all data sources together
+# TO DO:
+# 5. apply ?lambda? to catch where fid = 9, then also gamma (and alpha if major = 0)
+# 6. bring in "modern" discards by fishery, year
+# bring in "historic" and modern discards (calculate ratio from trusted years)
+# deal with foreign catch (allow for inclusion in historic catch)

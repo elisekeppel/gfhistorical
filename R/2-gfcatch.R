@@ -182,7 +182,9 @@ get_mod_catch_sum <- function(dat = mod_catch, rrf = spp){
       orf_kg = sum(ifelse(!species_code == 396, best_landed_kg, 0)),
       pop_kg = sum(ifelse(species_code == 396, best_landed_kg, 0)),
       trf_kg = sum(best_landed_kg)) %>%
-    ungroup()
+    ungroup() %>%
+    mutate(major = as.numeric(major_stat_area_code)) %>%
+    select(-major_stat_area_code)
 }
 
 
@@ -203,7 +205,7 @@ get_mod_catch_sum <- function(dat = mod_catch, rrf = spp){
 #' apply to historical catch of species/species groups and estimate historical
 #' catches of RRF.
 #'
-#' @param dat
+#' @param dat catch output from est_catch_per_pc which fills in missing catch weights from gf_mc_catch
 #' @param hlrock_ref_yrs
 #' @param halibut_ref_yrs
 #' @param dogling_ref_yrs
@@ -275,22 +277,20 @@ get_ratios <- function(dat = ref_catch, prom = 'orf') {
           prom == 'trf' ~ landed_kg/trf_kg
         )) %>%
     group_by(fid) %>%
-    mutate(sum_rrf_kg = sum(landed_kg)) %>%
+    mutate(sum_rrf_kg = sum(landed_kg)) %>% # sum catch over all major areas within each fid
     ungroup() %>%
-    mutate(alpha = landed_kg/sum_rrf_kg,
-      major = as.numeric(major_stat_area_code))
-  # %>%
-  #   select(1,8,10,11)
+    mutate(alpha = landed_kg/sum_rrf_kg, # divide catch in individual major areas by catch in all major areas within each fid
+      major = as.numeric(major_stat_area_code)) %>%
+    select(1,8,10,11)
 
   beta <- dat %>%
     filter(fid %in% c(2, 4, 5)) %>%
     group_by(major_stat_area_code) %>%
-    mutate(sum_rrf_kg = sum(landed_kg)) %>%
+    mutate(sum_rrf_kg = sum(landed_kg)) %>% # sum catch over all hl fids within each major area
     ungroup() %>%
-    mutate(beta = landed_kg/sum_rrf_kg,
-      major = as.numeric(major_stat_area_code))
-  # %>%
-  #   select(1,9,10)
+    mutate(beta = landed_kg/sum_rrf_kg, # divide catch in individual fids by catch in all 3 hl fids within each major area
+      major = as.numeric(major_stat_area_code)) %>%
+    select(1,9,10)
 
  u <-  left_join(gamma_alpha, beta)
 }
