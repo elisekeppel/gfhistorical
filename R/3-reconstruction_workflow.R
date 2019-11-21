@@ -94,7 +94,7 @@ hl <- orf_history_complete %>%
   right_join(ratios %>% select(fid, major, beta) %>% filter(fid %in% c(2,4,5))) %>%
   mutate(orf_kg = orf_kg * beta)
 
-# bring expanded hl fishery data back into orf_hisroty
+# bring expanded hl fishery data back into orf_history
 rrf_history <- orf_history_complete %>%
   filter(!fishery == "h&l") %>%
   mutate(fid =
@@ -155,7 +155,7 @@ d %>%
   filter(!is.na(major_stat_area)) %>%
   ggplot(aes(year, catch_kg, colour = major_stat_area, fill = major_stat_area)) +
   geom_col() +
-  theme_pbs() +
+  gfplot::theme_pbs() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
   scale_fill_manual(values = pal, drop = FALSE, breaks = c,
     labels = c) +
@@ -163,6 +163,7 @@ d %>%
     labels = c) +
   scale_x_discrete(breaks = seq(1920, year_range[2], 5)) +
   facet_wrap(vars(fishery), scales = "free")
+
 #-------------------------------------------------------------------------------
 # STILL TO DO FOR ORFHISTORY
 #-------------------------------------------------------------------------------
