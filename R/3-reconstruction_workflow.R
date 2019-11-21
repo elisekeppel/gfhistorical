@@ -1,5 +1,5 @@
 
-spp = '442'
+spp = '403'
 
 # use gfdata to get all rockfish catch from gffos merged catch table
 # need to source gfcatch.R
@@ -115,14 +115,13 @@ rrf_history <- orf_history_complete %>%
 # combine historic and modern catch
 #-------------------------------------------------------------------------------
 
-# arrange modern catch data
+# arrange modern and historical catch data
 mod_catch_input <- mod_catch_sum %>%
-  select(year, fid, major, catch_kg = as.integer(landed_kg))
+  select(year, fid, major, catch_kg = landed_kg)
 hist_catch_input <- rrf_history %>%
-  select(year, fid, major, catch_kg = as.integer(est_catch_kg))
+  select(year, fid, major, catch_kg = est_catch_kg)
 
-glimpse(rrf_history)
-glimpse(mod_catch_sum)
+# combine
 d <- rbind(mod_catch_input, hist_catch_input) %>%
   mutate(fishery =
       case_when(
