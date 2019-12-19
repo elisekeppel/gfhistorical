@@ -1,6 +1,7 @@
 .Rproj.user
 .Rhistory
 .RData
+testing.R
 *.rds
 *.xls
 R/M07_CatchRecon_EK.r
