@@ -3,11 +3,12 @@
 # Last edited: November 2019
 
 get_orf_history <- function(foreign = FALSE){
-  # Import raw catch data from Catch-Historical.xls spreadsheet from Rowan Haigh
-  #   containing orf/pop landings from various sources. Convert all landings
-  #   to kg and arrange in similar format.
-  # Note that the number of Yamanaka and Obradovich records differ from Rowan Haigh's orfhistory due to his
-  # multiple lines for catch in a given major area divided up by regions D1-3)
+# Import raw catch data from Catch-Historical.xls spreadsheet from Rowan Haigh
+#   containing orf/pop landings from various sources. Convert all landings
+#   to kg and arrange in similar format.
+# Note that the number of Yamanaka and Obradovich records differ from Rowan Haigh's orfhistory due to his
+# multiple lines for catch in a given major area divided up by regions D1-3. The catches
+# sum to the same values.
   ketchen76 <- read_xls("inst/extdata/Catch-Historical.xls", sheet = "Ketchen76", range = "A4:G614")
 
   stewart <- suppressMessages(read_xls("inst/extdata/Catch-Historical.xls",
@@ -114,9 +115,9 @@ get_orf_history <- function(foreign = FALSE){
     select(-nation, -region) %>%
     # filter for species 391 = ORF
     filter(year %in% c(1950:1953), spp %in% c(391)) %>%
-    # convert from lbs to metric tons
+    # convert from lbs to kg
     group_by(major) %>%
-    summarise(catch = sum(catch)/2.2046) %>% # convert from lbs to kg
+    summarise(catch = sum(catch)/2.2046) %>%
     mutate(units = "kg")
   sum_bc_us_landings <- as.numeric(bc_us_landings %>%
       summarise(catch = sum(catch)))
